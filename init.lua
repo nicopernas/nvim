@@ -287,6 +287,9 @@ vim.o.undofile = true
 vim.o.ignorecase = true
 vim.o.smartcase = true
 
+-- set column guide at 120 chars
+vim.opt.colorcolumn = '120'
+
 -- Keep signcolumn on by default
 vim.wo.signcolumn = 'yes'
 
@@ -314,6 +317,9 @@ vim.keymap.set({ 'n', 'v' }, '<C-s>', ':set spell! spell?<CR>')
 
 -- Ctrl-e toggles wrap mode. Works both normal and insert mode.
 vim.keymap.set({ 'n', 'v' }, '<C-e>', ':set wrap! wrap?<CR>')
+
+-- Ctrl-h turns off the highlight search
+vim.keymap.set({ 'n' }, '<C-h>', ':noh<CR>')
 
 -- Remove trailing white spaces on save
 vim.api.nvim_create_autocmd({ "BufWritePre" }, {
@@ -351,7 +357,21 @@ end
 vim.api.nvim_create_autocmd({ "BufWritePre" }, {
   pattern = { "*" },
   callback = function()
+    if vim.bo.filetype == "solidity" then
+      return
+    end
     organize_imports(1000)
+  end,
+})
+
+
+vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+  pattern = { "*.sol" },
+  callback = function()
+    vim.fn.system {
+      'forge',
+      'fmt',
+    }
   end,
 })
 
@@ -606,8 +626,28 @@ require('mason-lspconfig').setup()
 --  define the property 'filetypes' to the map in question.
 local servers = {
   -- clangd = {},
-  gopls = {},
-  pyright = {},
+  gopls = {
+    gopls = {
+      analyses = {
+        unusedparams = true,
+      },
+      staticcheck = true,
+      gofumpt = true,
+    },
+  },
+  pylsp = {
+    pylsp = {
+      plugins = {
+        rope = {
+          enable = true,
+        },
+        pycodestyle = {
+          ignore = { 'W391' },
+          maxLineLength = 120
+        }
+      }
+    }
+  },
   rust_analyzer = {},
   tsserver = {},
   -- html = { filetypes = { 'html', 'twig', 'hbs'} },
