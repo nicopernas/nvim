@@ -242,7 +242,7 @@ require('lazy').setup({
       vim.api.nvim_set_hl(0, "IlluminatedWordRead", { link = "LspReferenceRead" })
       vim.api.nvim_set_hl(0, "IlluminatedWordWrite", { link = "LspReferenceWrite" })
     end
-  }
+  },
   -- NOTE: Next Step on Your Neovim Journey: Add/Configure additional "plugins" for kickstart
   --       These are some example plugins that I've included in the kickstart repository.
   --       Uncomment any of the lines below to enable them.
@@ -256,6 +256,12 @@ require('lazy').setup({
   --
   --    For additional information see: https://github.com/folke/lazy.nvim#-structuring-your-plugins
   -- { import = 'custom.plugins' },
+  {
+    "Jay-Madden/auto-fix-return.nvim",
+    config = function()
+      require("auto-fix-return").setup({})
+    end
+  }
 }, {})
 
 -- [[ Setting options ]]
