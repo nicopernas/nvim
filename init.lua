@@ -261,13 +261,6 @@ require('lazy').setup({
   --
   --    For additional information see: https://github.com/folke/lazy.nvim#-structuring-your-plugins
   -- { import = 'custom.plugins' },
-  {
-    "Jay-Madden/auto-fix-return.nvim",
-    config = function()
-      require("auto-fix-return").setup({})
-    end
-  },
-  { 'echasnovski/mini.nvim', version = false },
 }, {})
 
 -- [[ Setting options ]]
@@ -309,6 +302,8 @@ vim.wo.signcolumn = 'yes'
 vim.o.updatetime = 250
 vim.o.timeoutlen = 300
 
+vim.o.tabstop = 4
+
 -- Set completeopt to have a better completion experience
 vim.o.completeopt = 'menuone,noselect'
 
@@ -339,41 +334,69 @@ vim.api.nvim_create_autocmd({ "BufWritePre" }, {
   command = [[%s/\s\+$//e]],
 })
 
+vim.api.nvim_create_autocmd({ "BufWritePre" }, {
+  pattern = { "*.json" },
+  command = "setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4",
+})
+
 vim.o.autoread = true
 vim.api.nvim_create_autocmd({ "BufEnter", "CursorHold", "CursorHoldI", "FocusGained" }, {
   command = "if mode() != 'c' | checktime | endif",
   pattern = { "*" },
 })
 
-function organize_imports(timeoutms)
-  local params = vim.lsp.util.make_range_params()
-  params.context = { only = { "source.organizeImports" } }
-  -- buf_request_sync defaults to a 1000ms timeout. Depending on your
-  -- machine and codebase, you may want longer. Add an additional
-  -- argument after params if you find that you have to write the file
-  -- twice for changes to be saved.
-  -- E.g., vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
-  local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params)
-  for cid, res in pairs(result or {}) do
-    for _, r in pairs(res.result or {}) do
-      if r.edit then
-        local enc = (vim.lsp.get_client_by_id(cid) or {}).offset_encoding or "utf-16"
-        vim.lsp.util.apply_workspace_edit(r.edit, enc)
+-- function organize_imports(timeoutms)
+--   local params = vim.lsp.util.make_range_params()
+--   params.context = { only = { "source.organizeImports" } }
+--   -- buf_request_sync defaults to a 1000ms timeout. Depending on your
+--   -- machine and codebase, you may want longer. Add an additional
+--   -- argument after params if you find that you have to write the file
+--   -- twice for changes to be saved.
+--   -- E.g., vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
+--   local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, timeoutms)
+--   for cid, res in pairs(result or {}) do
+--     for _, r in pairs(res.result or {}) do
+--       if r.edit then
+--         local enc = (vim.lsp.get_client_by_id(cid) or {}).offset_encoding or "utf-16"
+--         vim.lsp.util.apply_workspace_edit(r.edit, enc)
+--       end
+--     end
+--   end
+--   vim.lsp.buf.format({ async = false })
+-- end
+--
+-- -- organize imports and format on save
+-- vim.api.nvim_create_autocmd({ "BufWritePre" }, {
+--   pattern = { "*" },
+--   callback = function()
+--     -- if vim.bo.filetype == "solidity" then
+--     --   return
+--     -- end
+--     organize_imports(3000)
+--   end,
+-- })
+--
+vim.api.nvim_create_autocmd("BufWritePre", {
+  pattern = { "*.go", "*.ts", "*.js", "*.rs", "*.py", "*.lua", "*.json" },
+  callback = function()
+    local params = vim.lsp.util.make_range_params()
+    params.context = { only = { "source.organizeImports" } }
+    -- buf_request_sync defaults to a 1000ms timeout. Depending on your
+    -- machine and codebase, you may want longer. Add an additional
+    -- argument after params if you find that you have to write the file
+    -- twice for changes to be saved.
+    -- E.g.,       vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
+    local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 6000)
+    for cid, res in pairs(result or {}) do
+      for _, r in pairs(res.result or {}) do
+        if r.edit then
+          local enc = (vim.lsp.get_client_by_id(cid) or {}).offset_encoding or "utf-16"
+          vim.lsp.util.apply_workspace_edit(r.edit, enc)
+        end
       end
     end
+    vim.lsp.buf.format({ async = false })
   end
-  vim.lsp.buf.format({ async = false })
-end
-
--- organize imports and format on save
-vim.api.nvim_create_autocmd({ "BufWritePre" }, {
-  pattern = { "*" },
-  callback = function()
-    if vim.bo.filetype == "solidity" then
-      return
-    end
-    organize_imports(1000)
-  end,
 })
 
 
@@ -661,6 +684,7 @@ local servers = {
     }
   },
   rust_analyzer = {},
+  solidity_ls = {},
   tsserver = {},
   -- html = { filetypes = { 'html', 'twig', 'hbs'} },
 
@@ -688,11 +712,13 @@ mason_lspconfig.setup {
 
 mason_lspconfig.setup_handlers {
   function(server_name)
-    require('lspconfig')[server_name].setup {
+    local lspconfig = require('lspconfig')
+    lspconfig[server_name].setup {
       capabilities = capabilities,
       on_attach = on_attach,
       settings = servers[server_name],
       filetypes = (servers[server_name] or {}).filetypes,
+      root_dir = lspconfig.util.root_pattern(),
     }
   end,
 }
@@ -748,5 +774,7 @@ cmp.setup {
   },
 }
 
+-- https://www.reddit.com/r/neovim/comments/6j4wri/debugging_slowness/
+vim.loaded_matchparen = 1
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
