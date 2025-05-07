@@ -83,12 +83,14 @@ require('lazy').setup({
     'neovim/nvim-lspconfig',
     dependencies = {
       -- Automatically install LSPs to stdpath for neovim
-      'williamboman/mason.nvim',
-      'williamboman/mason-lspconfig.nvim',
+      --  REMOVE VERSION PINNING WHEN THIS IS FIXED
+      --  https://github.com/mason-org/mason-lspconfig.nvim/issues/545
+      { "mason-org/mason.nvim",           version = "1.11.0" },
+      { "mason-org/mason-lspconfig.nvim", version = "1.32.0" },
 
       -- Useful status updates for LSP
       -- NOTE: `opts = {}` is the same as calling `require('fidget').setup({})`
-      { 'j-hui/fidget.nvim', opts = {} },
+      { 'j-hui/fidget.nvim',              opts = {} },
 
       -- Additional lua configuration, makes nvim stuff amazing!
       'folke/neodev.nvim',
@@ -248,6 +250,7 @@ require('lazy').setup({
       vim.api.nvim_set_hl(0, "IlluminatedWordWrite", { link = "LspReferenceWrite" })
     end
   },
+  { "github/copilot.vim",    lazy = false },
   -- NOTE: Next Step on Your Neovim Journey: Add/Configure additional "plugins" for kickstart
   --       These are some example plugins that I've included in the kickstart repository.
   --       Uncomment any of the lines below to enable them.
@@ -377,7 +380,7 @@ vim.api.nvim_create_autocmd({ "BufEnter", "CursorHold", "CursorHoldI", "FocusGai
 -- })
 --
 vim.api.nvim_create_autocmd("BufWritePre", {
-  pattern = { "*.go", "*.ts", "*.js", "*.rs", "*.py", "*.lua", "*.json" },
+  pattern = { "*.go", "*.ts", "*.js", "*.rs", "*.py", "*.lua", "*.json", "*.sh" },
   callback = function()
     local params = vim.lsp.util.make_range_params()
     params.context = { only = { "source.organizeImports" } }
@@ -527,7 +530,9 @@ vim.keymap.set('n', '<leader>sr', require('telescope.builtin').resume, { desc = 
 vim.defer_fn(function()
   require('nvim-treesitter.configs').setup {
     -- Add languages to be installed here that you want installed for treesitter
-    ensure_installed = { 'c', 'cpp', 'go', 'lua', 'python', 'rust', 'tsx', 'javascript', 'typescript', 'vimdoc', 'vim', 'bash', 'json' },
+    ensure_installed = {
+      'c', 'cpp', 'go', 'lua', 'python', 'rust', 'tsx', 'javascript', 'typescript', 'vimdoc', 'vim', 'bash', 'json'
+    },
 
     -- Autoinstall languages that are not installed. Defaults to false (but you can change for yourself!)
     auto_install = true,
@@ -611,8 +616,12 @@ local on_attach = function(_, bufnr)
   nmap('<leader>ca', vim.lsp.buf.code_action, '[C]ode [A]ction')
 
   nmap('gd', require('telescope.builtin').lsp_definitions, '[G]oto [D]efinition')
-  nmap('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
-  nmap('gI', require('telescope.builtin').lsp_implementations, '[G]oto [I]mplementation')
+  nmap('gr', function()
+    require('telescope.builtin').lsp_references({ show_line = false })
+  end, '[G]oto [R]eferences')
+  nmap('gI', function()
+    require('telescope.builtin').lsp_implementations({ show_line = false })
+  end, '[G]oto [I]mplementation')
   nmap('<leader>D', require('telescope.builtin').lsp_type_definitions, 'Type [D]efinition')
   nmap('<leader>ds', require('telescope.builtin').lsp_document_symbols, '[D]ocument [S]ymbols')
   nmap('<leader>ws', require('telescope.builtin').lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
@@ -650,6 +659,7 @@ require('which-key').register {
 -- before setting up the servers.
 require('mason').setup()
 require('mason-lspconfig').setup()
+local util = require('lspconfig.util')
 
 -- Enable the following language servers
 --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
@@ -685,7 +695,9 @@ local servers = {
   },
   rust_analyzer = {},
   solidity_ls = {},
-  tsserver = {},
+  tsp_server = {},
+  bashls = {},
+
   -- html = { filetypes = { 'html', 'twig', 'hbs'} },
 
   lua_ls = {
@@ -695,6 +707,20 @@ local servers = {
     },
   },
 }
+
+require 'lspconfig'.gh_actions_ls.setup({
+  cmd = { 'gh-actions-language-server', '--stdio' },
+  filetypes = { 'yaml.github' },
+  root_dir = util.root_pattern('.github'),
+  single_file_support = true,
+  capabilities = {
+    workspace = {
+      didChangeWorkspaceFolders = {
+        dynamicRegistration = true,
+      },
+    },
+  },
+})
 
 -- Setup neovim lua configuration
 require('neodev').setup()
@@ -778,3 +804,8 @@ cmp.setup {
 vim.loaded_matchparen = 1
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+vim.filetype.add({
+  pattern = {
+    ['.*/%.github[%w/]+workflows[%w/]+.*%.ya?ml'] = 'yaml.github',
+  },
+})
