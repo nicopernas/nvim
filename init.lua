@@ -251,6 +251,14 @@ require('lazy').setup({
     end
   },
   { "github/copilot.vim",    lazy = false },
+  {
+    "zbirenbaum/copilot-cmp",
+    dependencies = { "zbirenbaum/copilot.lua" },
+    config = function()
+      require("copilot").setup({})
+      require("copilot_cmp").setup()
+    end
+  },
   -- NOTE: Next Step on Your Neovim Journey: Add/Configure additional "plugins" for kickstart
   --       These are some example plugins that I've included in the kickstart repository.
   --       Uncomment any of the lines below to enable them.
@@ -264,7 +272,7 @@ require('lazy').setup({
   --
   --    For additional information see: https://github.com/folke/lazy.nvim#-structuring-your-plugins
   -- { import = 'custom.plugins' },
-}, {})
+})
 
 -- [[ Setting options ]]
 -- See `:help vim.o`
@@ -348,47 +356,22 @@ vim.api.nvim_create_autocmd({ "BufEnter", "CursorHold", "CursorHoldI", "FocusGai
   pattern = { "*" },
 })
 
--- function organize_imports(timeoutms)
---   local params = vim.lsp.util.make_range_params()
---   params.context = { only = { "source.organizeImports" } }
---   -- buf_request_sync defaults to a 1000ms timeout. Depending on your
---   -- machine and codebase, you may want longer. Add an additional
---   -- argument after params if you find that you have to write the file
---   -- twice for changes to be saved.
---   -- E.g., vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
---   local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, timeoutms)
---   for cid, res in pairs(result or {}) do
---     for _, r in pairs(res.result or {}) do
---       if r.edit then
---         local enc = (vim.lsp.get_client_by_id(cid) or {}).offset_encoding or "utf-16"
---         vim.lsp.util.apply_workspace_edit(r.edit, enc)
---       end
---     end
---   end
---   vim.lsp.buf.format({ async = false })
--- end
---
--- -- organize imports and format on save
--- vim.api.nvim_create_autocmd({ "BufWritePre" }, {
---   pattern = { "*" },
---   callback = function()
---     -- if vim.bo.filetype == "solidity" then
---     --   return
---     -- end
---     organize_imports(3000)
---   end,
--- })
---
+vim.api.nvim_create_autocmd("BufWritePre", {
+  pattern = "*",
+  command = "retab"
+})
+
 vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = { "*.go", "*.ts", "*.js", "*.rs", "*.py", "*.lua", "*.json", "*.sh" },
-  callback = function()
-    local params = vim.lsp.util.make_range_params()
+  callback = function(args)
+    local clients = vim.lsp.get_clients({ bufnr = 0 })
+    local encoding = "utf-16"
+    if #clients > 0 then
+      encoding = clients[1].offset_encoding or "utf-16"
+    end
+
+    local params = vim.lsp.util.make_range_params(nil, encoding)
     params.context = { only = { "source.organizeImports" } }
-    -- buf_request_sync defaults to a 1000ms timeout. Depending on your
-    -- machine and codebase, you may want longer. Add an additional
-    -- argument after params if you find that you have to write the file
-    -- twice for changes to be saved.
-    -- E.g.,       vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
     local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 6000)
     for cid, res in pairs(result or {}) do
       for _, r in pairs(res.result or {}) do
@@ -398,22 +381,16 @@ vim.api.nvim_create_autocmd("BufWritePre", {
         end
       end
     end
-    vim.lsp.buf.format({ async = false })
+    vim.lsp.buf.format({ bufnr = args.buf, async = false })
   end
 })
 
-
-vim.api.nvim_create_autocmd({ "BufWritePost" }, {
-  pattern = { "*.sol" },
-  callback = function()
-    vim.fn.system {
-      'forge',
-      'fmt',
-    }
+vim.api.nvim_create_autocmd("BufWritePre", {
+  pattern = "*.sol",
+  callback = function(args)
+    vim.lsp.buf.format({ bufnr = args.buf, async = false })
   end,
 })
-
--- vim.cmd [[ autocmd BufWritePre <buffer> call execute('LspCodeActionSync source.organizeImports') ]]
 
 -- remember last position
 vim.api.nvim_create_autocmd({ 'BufWinEnter' }, {
@@ -531,7 +508,8 @@ vim.defer_fn(function()
   require('nvim-treesitter.configs').setup {
     -- Add languages to be installed here that you want installed for treesitter
     ensure_installed = {
-      'c', 'cpp', 'go', 'lua', 'python', 'rust', 'tsx', 'javascript', 'typescript', 'vimdoc', 'vim', 'bash', 'json'
+      'c', 'cpp', 'go', 'lua', 'python', 'rust', 'tsx', 'javascript', 'typescript', 'vimdoc', 'vim', 'bash', 'json',
+      'yaml', 'markdown', 'dockerfile',
     },
 
     -- Autoinstall languages that are not installed. Defaults to false (but you can change for yourself!)
@@ -655,10 +633,6 @@ require('which-key').register {
   ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
 }
 
--- mason-lspconfig requires that these setup functions are called in this order
--- before setting up the servers.
-require('mason').setup()
-require('mason-lspconfig').setup()
 local util = require('lspconfig.util')
 
 -- Enable the following language servers
@@ -670,7 +644,6 @@ local util = require('lspconfig.util')
 --  If you want to override the default filetypes that your language server will attach to you can
 --  define the property 'filetypes' to the map in question.
 local servers = {
-  -- clangd = {},
   gopls = {
     gopls = {
       analyses = {
@@ -678,6 +651,12 @@ local servers = {
       },
       staticcheck = true,
       gofumpt = true,
+      codelenses = {
+        test = true,
+        tidy = true,
+        upgrade_dependency = true,
+        vendor = true,
+      },
     },
   },
   pylsp = {
@@ -693,13 +672,20 @@ local servers = {
       }
     }
   },
+  solidity_ls = {
+    opts = {
+      servers = {
+        solidity = {
+          cmd = { "nomicfoundation-solidity-language-server", "--stdio" },
+          filetypes = { "solidity" },
+          settings = { solidity = { formatter = "forge" } },
+        },
+      },
+    },
+  },
   rust_analyzer = {},
-  solidity_ls = {},
   tsp_server = {},
   bashls = {},
-
-  -- html = { filetypes = { 'html', 'twig', 'hbs'} },
-
   lua_ls = {
     Lua = {
       workspace = { checkThirdParty = false },
@@ -729,9 +715,10 @@ require('neodev').setup()
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
--- Ensure the servers above are installed
+-- mason-lspconfig requires that these setup functions are called in this order
+-- before setting up the servers.
+require('mason').setup()
 local mason_lspconfig = require 'mason-lspconfig'
-
 mason_lspconfig.setup {
   ensure_installed = vim.tbl_keys(servers),
 }
@@ -763,6 +750,7 @@ cmp.setup {
     end,
   },
   completion = {
+    autocomplete = false,
     completeopt = 'menu,menuone,noinsert'
   },
   mapping = cmp.mapping.preset.insert {
