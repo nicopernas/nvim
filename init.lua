@@ -83,14 +83,12 @@ require('lazy').setup({
     'neovim/nvim-lspconfig',
     dependencies = {
       -- Automatically install LSPs to stdpath for neovim
-      --  REMOVE VERSION PINNING WHEN THIS IS FIXED
-      --  https://github.com/mason-org/mason-lspconfig.nvim/issues/545
-      { "mason-org/mason.nvim",           version = "1.11.0" },
-      { "mason-org/mason-lspconfig.nvim", version = "1.32.0" },
+      { "mason-org/mason.nvim" },
+      { "mason-org/mason-lspconfig.nvim" },
 
       -- Useful status updates for LSP
       -- NOTE: `opts = {}` is the same as calling `require('fidget').setup({})`
-      { 'j-hui/fidget.nvim',              opts = {} },
+      { 'j-hui/fidget.nvim',             opts = {} },
 
       -- Additional lua configuration, makes nvim stuff amazing!
       'folke/neodev.nvim',
@@ -134,6 +132,10 @@ require('lazy').setup({
       },
       on_attach = function(bufnr)
         vim.keymap.set('n', '<leader>hp', require('gitsigns').preview_hunk, { buffer = bufnr, desc = 'Preview git hunk' })
+        vim.keymap.set('n', '<leader>hu', require('gitsigns').reset_hunk, { buffer = bufnr, desc = 'Reset git hunk' })
+        vim.keymap.set('n', '<leader>hs', require('gitsigns').stage_hunk, { buffer = bufnr, desc = 'Stage git hunk' })
+        vim.keymap.set('n', '<leader>hr', require('gitsigns').undo_stage_hunk,
+          { buffer = bufnr, desc = 'Undo stage git hunk' })
 
         -- don't override the built-in and fugitive keymaps
         local gs = package.loaded.gitsigns
@@ -214,7 +216,6 @@ require('lazy').setup({
   -- Fuzzy Finder (files, lsp, etc)
   {
     'nvim-telescope/telescope.nvim',
-    branch = '0.1.x',
     dependencies = {
       'nvim-lua/plenary.nvim',
       -- Fuzzy Finder Algorithm which requires local dependencies to be built.
@@ -357,11 +358,11 @@ vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = { "*.go", "*.ts", "*.js", "*.rs", "*.py", "*.lua", "*.json", "*.sh" },
   callback = function(args)
     local clients = vim.lsp.get_clients({ bufnr = 0 })
-    local encoding = "utf-16"
-    if #clients > 0 then
-      encoding = clients[1].offset_encoding or "utf-16"
+    if #clients == 0 then
+      return
     end
 
+    local encoding = clients[1].offset_encoding or "utf-16"
     local params = vim.lsp.util.make_range_params(nil, encoding)
     params.context = { only = { "source.organizeImports" } }
     local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 6000)
@@ -715,18 +716,17 @@ mason_lspconfig.setup {
   ensure_installed = vim.tbl_keys(servers),
 }
 
-mason_lspconfig.setup_handlers {
-  function(server_name)
-    local lspconfig = require('lspconfig')
-    lspconfig[server_name].setup {
-      capabilities = capabilities,
-      on_attach = on_attach,
-      settings = servers[server_name],
-      filetypes = (servers[server_name] or {}).filetypes,
-      root_dir = lspconfig.util.root_pattern(),
-    }
-  end,
-}
+-- Configure each server manually with the new API
+for server_name, config in pairs(servers) do
+  local lspconfig = require('lspconfig')
+  lspconfig[server_name].setup {
+    capabilities = capabilities,
+    on_attach = on_attach,
+    settings = config,
+    filetypes = (config or {}).filetypes,
+    root_dir = lspconfig.util.root_pattern('.git', 'go.mod', '.'),
+  }
+end
 
 -- [[ Configure nvim-cmp ]]
 -- See `:help cmp`
