@@ -626,8 +626,6 @@ require('which-key').register {
   ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
 }
 
-local util = require('lspconfig.util')
-
 -- Enable the following language servers
 --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
 --
@@ -677,7 +675,22 @@ local servers = {
     },
   },
   rust_analyzer = {},
-  tsp_server = {},
+  vtsls = {
+    typescript = {
+      updateImportsOnFileMove = { enabled = "always" },
+      suggest = {
+        completeFunctionCalls = true,
+      },
+      inlayHints = {
+        enumMemberValues = { enabled = true },
+        functionLikeReturnTypes = { enabled = true },
+        parameterNames = { enabled = "literals" },
+        parameterTypes = { enabled = true },
+        propertyDeclarationTypes = { enabled = true },
+        variableTypes = { enabled = false },
+      },
+    },
+  },
   bashls = {},
   lua_ls = {
     Lua = {
@@ -687,10 +700,11 @@ local servers = {
   },
 }
 
-require 'lspconfig'.gh_actions_ls.setup({
+-- Configure GitHub Actions LSP using the new API
+vim.lsp.config.gh_actions_ls = {
   cmd = { 'gh-actions-language-server', '--stdio' },
   filetypes = { 'yaml.github' },
-  root_dir = util.root_pattern('.github'),
+  root_markers = { '.github' },
   single_file_support = true,
   capabilities = {
     workspace = {
@@ -699,7 +713,7 @@ require 'lspconfig'.gh_actions_ls.setup({
       },
     },
   },
-})
+}
 
 -- Setup neovim lua configuration
 require('neodev').setup()
@@ -716,15 +730,15 @@ mason_lspconfig.setup {
   ensure_installed = vim.tbl_keys(servers),
 }
 
--- Configure each server manually with the new API
+-- Configure each server using the new vim.lsp.config API
 for server_name, config in pairs(servers) do
-  local lspconfig = require('lspconfig')
-  lspconfig[server_name].setup {
+  vim.lsp.config[server_name] = {
     capabilities = capabilities,
     on_attach = on_attach,
     settings = config,
     filetypes = (config or {}).filetypes,
-    root_dir = lspconfig.util.root_pattern('.git', 'go.mod', '.'),
+    root_markers = { '.git', 'go.mod' },
+    fallback_root_markers = { '.' },
   }
 end
 
